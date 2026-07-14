@@ -1,24 +1,59 @@
 const state = {
   config: null,
-  activeDialogId: "ai",
+  activeDialogId: localStorage.getItem("activeDialogId") || "ai",
   chatId: localStorage.getItem("chatId") || `vk-demo-${crypto.randomUUID()}`,
   models: [],
+  threads: {},
   mediaRecorder: null,
   recordedChunks: [],
-  messages: [
-    {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content: "Привет. Я локальный демо-бот: пишите текстом или нажмите микрофон. Голос я распознаю в поле ввода, чтобы вы могли поправить текст перед отправкой.",
-    },
-  ],
 };
 
-const dialogs = [
-  { id: "ai", title: "AI ассистент", preview: "OpenAI-compatible demo", time: "сейчас", initials: "AI" },
-  { id: "support", title: "VK demo support", preview: "Локальный показ без доступа к VK", time: "10:31", initials: "VK" },
-  { id: "ops", title: "LLM / STT / TTS", preview: "Ollama, Whisper, Speech API", time: "09:48", initials: "API" },
-];
+const storageKey = "vkDemoThreadsV2";
+
+const defaultThreads = {
+  ai: {
+    id: "ai",
+    title: "AI ассистент",
+    preview: "OpenAI-compatible demo",
+    time: "сейчас",
+    initials: "AI",
+    bot: true,
+    chatId: state.chatId,
+    messages: [
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "Привет. Я локальный демо-бот: пишите текстом или нажмите микрофон. Голос я распознаю в поле ввода, чтобы вы могли поправить текст перед отправкой.",
+      },
+    ],
+  },
+  support: {
+    id: "support",
+    title: "VK demo support",
+    preview: "Локальный показ без доступа к VK",
+    time: "10:31",
+    initials: "VK",
+    bot: false,
+    messages: [
+      { id: crypto.randomUUID(), role: "assistant", content: "Добрый день! Это демонстрационная переписка поддержки сообщества." },
+      { id: crypto.randomUUID(), role: "user", content: "Можно показать, как бот будет отвечать без доступа к VK?" },
+      { id: crypto.randomUUID(), role: "assistant", content: "Да. Эта страница имитирует VK Messenger, а backend уже подключен к LLM, TTS и STT через API." },
+    ],
+  },
+  ops: {
+    id: "ops",
+    title: "LLM / STT / TTS",
+    preview: "Ollama, Whisper, Speech API",
+    time: "09:48",
+    initials: "API",
+    bot: false,
+    messages: [
+      { id: crypto.randomUUID(), role: "assistant", content: "LLM: qwen2.5:3b через OpenWebUI gateway." },
+      { id: crypto.randomUUID(), role: "assistant", content: "STT: голос распознается в поле ввода, перед отправкой текст можно поправить." },
+      { id: crypto.randomUUID(), role: "assistant", content: "TTS: ответы можно озвучивать, голос на сервере один." },
+    ],
+  },
+};
 
 const els = {
   dialogList: document.querySelector("#dialogList"),
@@ -40,6 +75,7 @@ const els = {
 
 const defaultSystemPrompt = "Ты дружелюбный русскоязычный ассистент VK-бота. Отвечай кратко, полезно и естественно для переписки.";
 localStorage.setItem("chatId", state.chatId);
+state.threads = loadThreads();
 
 async function loadConfig() {
   const response = await fetch("/api/config");
@@ -63,7 +99,7 @@ function renderEndpoints() {
 function renderDialogs() {
   const query = els.dialogSearch.value.trim().toLowerCase();
   els.dialogList.innerHTML = "";
-  dialogs
+  Object.values(state.threads)
     .filter((dialog) => dialog.title.toLowerCase().includes(query) || dialog.preview.toLowerCase().includes(query))
     .forEach((dialog) => {
       const button = document.createElement("button");
@@ -79,16 +115,29 @@ function renderDialogs() {
       `;
       button.addEventListener("click", () => {
         state.activeDialogId = dialog.id;
+        localStorage.setItem("activeDialogId", state.activeDialogId);
+        renderChatHeader();
         renderDialogs();
+        renderMessages({ forceBottom: true });
       });
       els.dialogList.append(button);
     });
 }
 
-function renderMessages() {
-  const shouldStickToBottom = isMessagesNearBottom();
+function renderChatHeader() {
+  const thread = getActiveThread();
+  document.querySelector("#chatName").textContent = thread.title;
+  document.querySelector("#chatStatus").textContent = thread.bot
+    ? "OpenAI-compatible LLM, STT и TTS"
+    : "Фейковая переписка для демо";
+  document.querySelector(".bot-avatar").textContent = thread.initials;
+}
+
+function renderMessages(options = {}) {
+  const shouldStickToBottom = options.forceBottom || isMessagesNearBottom();
+  const thread = getActiveThread();
   els.messages.innerHTML = "";
-  state.messages.forEach((message) => {
+  thread.messages.forEach((message) => {
     const item = document.createElement("article");
     item.className = `message ${message.role === "user" ? "out" : ""} ${message.role === "system" ? "system" : ""} ${message.loading ? "loading" : ""}`;
     const bubble = document.createElement("div");
@@ -111,15 +160,22 @@ function renderMessages() {
 
 function addMessage(role, content, extra = {}) {
   const message = { id: crypto.randomUUID(), role, content, ...extra };
-  state.messages.push(message);
+  getActiveThread().messages.push(message);
+  touchActiveThread(content);
+  saveThreads();
+  renderDialogs();
   renderMessages();
   return message;
 }
 
 function updateMessage(id, patch) {
-  const message = state.messages.find((item) => item.id === id);
+  const thread = getActiveThread();
+  const message = thread.messages.find((item) => item.id === id);
   if (!message) return;
   Object.assign(message, patch);
+  touchActiveThread(message.content);
+  saveThreads();
+  renderDialogs();
   renderMessages();
 }
 
@@ -129,7 +185,11 @@ async function sendMessage() {
   els.input.value = "";
   resizeInput();
   addMessage("user", text);
-  await askAssistant();
+  if (getActiveThread().bot) {
+    await askAssistant();
+  } else {
+    addMessage("assistant", "Это фейковая переписка. Для LLM-ответа откройте чат AI ассистент.");
+  }
 }
 
 async function askAssistant() {
@@ -139,7 +199,7 @@ async function askAssistant() {
     localStorage.setItem("systemPrompt", els.systemPrompt.value.trim());
     const messages = [
       { role: "system", content: els.systemPrompt.value.trim() || defaultSystemPrompt },
-      ...state.messages
+      ...getActiveThread().messages
         .filter((message) => !message.loading && message.role !== "system")
         .slice(-16)
         .map((message) => ({
@@ -152,7 +212,7 @@ async function askAssistant() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: getSelectedModel(),
-        chat_id: state.chatId,
+        chat_id: getActiveThread().chatId || state.chatId,
         temperature: Number(els.temperatureInput.value || 0.6),
         max_tokens: 220,
         keep_alive: "30m",
@@ -317,9 +377,13 @@ function bindEvents() {
 }
 
 async function init() {
+  if (!state.threads[state.activeDialogId]) {
+    state.activeDialogId = "ai";
+  }
   bindEvents();
+  renderChatHeader();
   renderDialogs();
-  renderMessages();
+  renderMessages({ forceBottom: true });
   await loadConfig();
   await loadModels();
 }
@@ -367,6 +431,49 @@ function getSelectedModel() {
     syncSelectedModel();
   }
   return els.modelInput.value.trim() || state.config.llmModel;
+}
+
+function loadThreads() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+    if (!saved || typeof saved !== "object") {
+      return clone(defaultThreads);
+    }
+    const merged = clone(defaultThreads);
+    for (const [id, thread] of Object.entries(saved)) {
+      if (thread && Array.isArray(thread.messages)) {
+        merged[id] = { ...merged[id], ...thread };
+      }
+    }
+    return merged;
+  } catch {
+    return clone(defaultThreads);
+  }
+}
+
+function saveThreads() {
+  const snapshot = clone(state.threads);
+  for (const thread of Object.values(snapshot)) {
+    thread.messages = thread.messages
+      .filter((message) => !message.loading)
+      .slice(-80)
+      .map((message) => ({ ...message, audioUrl: undefined }));
+  }
+  localStorage.setItem(storageKey, JSON.stringify(snapshot));
+}
+
+function getActiveThread() {
+  return state.threads[state.activeDialogId] || state.threads.ai;
+}
+
+function touchActiveThread(preview) {
+  const thread = getActiveThread();
+  thread.preview = String(preview || "").replace(/\s+/g, " ").trim().slice(0, 80) || thread.preview;
+  thread.time = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 init();

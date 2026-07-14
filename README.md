@@ -9,6 +9,7 @@
 - Whisper/OpenAI-compatible STT endpoint `/v1/audio/transcriptions`.
 - OpenAI-compatible TTS endpoint `/v1/audio/speech`.
 - Локальный интерфейс диалогов с отправкой текста, записью голоса, редактированием STT-текста перед отправкой и аудиоответами.
+- Локальное хранение истории диалогов в браузере через `localStorage`.
 - Без внешних Python/npm зависимостей.
 
 ## Быстрый старт
