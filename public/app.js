@@ -86,6 +86,7 @@ function renderDialogs() {
 }
 
 function renderMessages() {
+  const shouldStickToBottom = isMessagesNearBottom();
   els.messages.innerHTML = "";
   state.messages.forEach((message) => {
     const item = document.createElement("article");
@@ -103,7 +104,9 @@ function renderMessages() {
     item.append(bubble);
     els.messages.append(item);
   });
-  els.messages.scrollTop = els.messages.scrollHeight;
+  if (shouldStickToBottom) {
+    scrollMessagesToBottom();
+  }
 }
 
 function addMessage(role, content, extra = {}) {
@@ -251,6 +254,21 @@ function blobToDataUrl(blob) {
 function resizeInput() {
   els.input.style.height = "auto";
   els.input.style.height = `${Math.min(140, Math.max(42, els.input.scrollHeight))}px`;
+  scrollMessagesToBottom();
+}
+
+function isMessagesNearBottom() {
+  if (!els.messages.scrollHeight || els.messages.scrollHeight <= els.messages.clientHeight) {
+    return true;
+  }
+  const distance = els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight;
+  return distance < 96;
+}
+
+function scrollMessagesToBottom() {
+  requestAnimationFrame(() => {
+    els.messages.scrollTop = els.messages.scrollHeight;
+  });
 }
 
 function cleanAssistantContent(value) {

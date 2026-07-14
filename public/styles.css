@@ -18,9 +18,15 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
   color: var(--text);
   background: var(--bg);
   font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
@@ -36,7 +42,8 @@ textarea {
   display: grid;
   grid-template-columns: 72px minmax(260px, 360px) minmax(0, 1fr) 0;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -93,11 +100,15 @@ textarea {
 .chat,
 .settings-panel {
   min-width: 0;
+  min-height: 0;
   background: var(--panel);
 }
 
 .dialogs {
+  display: grid;
+  grid-template-rows: 64px 64px minmax(0, 1fr);
   border-right: 1px solid var(--line);
+  overflow: hidden;
 }
 
 .dialogs-header,
@@ -147,8 +158,10 @@ h2 {
 }
 
 .dialog-list {
-  height: calc(100vh - 116px);
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 4px 8px 12px;
 }
 
@@ -207,6 +220,7 @@ h2 {
   display: grid;
   grid-template-rows: 64px minmax(0, 1fr) auto;
   background: #f7f8fa;
+  overflow: hidden;
 }
 
 .chat-header {
@@ -248,7 +262,10 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 20px clamp(12px, 4vw, 56px);
 }
 
@@ -316,6 +333,7 @@ h2 {
   padding: 12px 16px;
   background: #ffffff;
   border-top: 1px solid var(--line);
+  min-height: 67px;
 }
 
 .composer textarea {
