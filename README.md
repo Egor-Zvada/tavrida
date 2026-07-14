@@ -26,14 +26,20 @@ http://127.0.0.1:8080
 
 ## Конфигурация
 
-По умолчанию используются переданные локальные сервисы:
+По умолчанию используется HTTPS gateway без прямого IP:
 
 ```text
-LLM_BASE_URL=http://185.74.228.13:11434/v1
-STT_BASE_URL=http://185.74.228.13:11000/v1
-TTS_BASE_URL=http://185.74.228.13:10000/v1
-STT_API_KEY=M00nglow
-TTS_API_KEY=M00nglow
+MODELS_URL=https://dev.egor-zvada.ru/api/models
+LLM_BASE_URL=https://dev.egor-zvada.ru/api
+STT_BASE_URL=https://dev.egor-zvada.ru/api/v1
+TTS_BASE_URL=https://dev.egor-zvada.ru/api/v1
+MESSAGES_URL=https://dev.egor-zvada.ru/api/v1/messages
+```
+
+Секретный ключ храните только в локальном `.env`:
+
+```text
+API_KEY=put-your-api-key-here
 ```
 
 На указанном Ollama endpoint обнаружены модели `qwen2.5:3b`, `gpt-oss:20b` и `deepseek-r1:8b`.

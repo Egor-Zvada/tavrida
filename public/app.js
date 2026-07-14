@@ -30,6 +30,7 @@ const els = {
   settingsPanel: document.querySelector("#settingsPanel"),
   closeSettings: document.querySelector("#closeSettings"),
   modelInput: document.querySelector("#modelInput"),
+  modelOptions: document.querySelector("#modelOptions"),
   temperatureInput: document.querySelector("#temperatureInput"),
   systemPrompt: document.querySelector("#systemPrompt"),
   endpointList: document.querySelector("#endpointList"),
@@ -284,6 +285,34 @@ async function init() {
   renderDialogs();
   renderMessages();
   await loadConfig();
+  await loadModels();
+}
+
+async function loadModels() {
+  try {
+    const response = await fetch("/api/models");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || data.error || "Models request failed");
+    const models = normalizeModels(data);
+    els.modelOptions.innerHTML = models
+      .map((model) => `<option value="${escapeHtml(model)}"></option>`)
+      .join("");
+  } catch (error) {
+    addMessage("system", `Список моделей не загрузился: ${error.message}`);
+  }
+}
+
+function normalizeModels(data) {
+  if (Array.isArray(data)) {
+    return data.map((item) => String(item.id || item.name || item)).filter(Boolean);
+  }
+  if (Array.isArray(data.data)) {
+    return data.data.map((item) => String(item.id || item.name || item)).filter(Boolean);
+  }
+  if (Array.isArray(data.models)) {
+    return data.models.map((item) => String(item.id || item.name || item)).filter(Boolean);
+  }
+  return [];
 }
 
 init();

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import base64
 import json
-import mimetypes
 import os
 import sys
 import time
@@ -31,14 +30,17 @@ load_env(ROOT / ".env")
 
 
 CONFIG = {
-    "llm_base_url": os.getenv("LLM_BASE_URL", "http://185.74.228.13:11434/v1").rstrip("/"),
-    "llm_api_key": os.getenv("LLM_API_KEY", "ollama"),
+    "api_key": os.getenv("API_KEY", os.getenv("LLM_API_KEY", "")),
+    "models_url": os.getenv("MODELS_URL", "https://dev.egor-zvada.ru/api/models"),
+    "messages_url": os.getenv("MESSAGES_URL", "https://dev.egor-zvada.ru/api/v1/messages"),
+    "llm_base_url": os.getenv("LLM_BASE_URL", "https://dev.egor-zvada.ru/api").rstrip("/"),
+    "llm_api_key": os.getenv("LLM_API_KEY", os.getenv("API_KEY", "")),
     "llm_model": os.getenv("LLM_MODEL", "qwen2.5:3b"),
-    "stt_base_url": os.getenv("STT_BASE_URL", "http://185.74.228.13:11000/v1").rstrip("/"),
-    "stt_api_key": os.getenv("STT_API_KEY", "M00nglow"),
+    "stt_base_url": os.getenv("STT_BASE_URL", "https://dev.egor-zvada.ru/api/v1").rstrip("/"),
+    "stt_api_key": os.getenv("STT_API_KEY", os.getenv("API_KEY", "")),
     "stt_model": os.getenv("STT_MODEL", "whisper-1"),
-    "tts_base_url": os.getenv("TTS_BASE_URL", "http://185.74.228.13:10000/v1").rstrip("/"),
-    "tts_api_key": os.getenv("TTS_API_KEY", "M00nglow"),
+    "tts_base_url": os.getenv("TTS_BASE_URL", "https://dev.egor-zvada.ru/api/v1").rstrip("/"),
+    "tts_api_key": os.getenv("TTS_API_KEY", os.getenv("API_KEY", "")),
     "tts_model": os.getenv("TTS_MODEL", "tts-1"),
     "tts_voice": os.getenv("TTS_VOICE", "alloy"),
     "host": os.getenv("HOST", "127.0.0.1"),
@@ -68,6 +70,15 @@ def bearer_headers(api_key):
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     return headers
+
+
+def get_raw(url, api_key, timeout=30):
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = Request(url, headers=headers, method="GET")
+    with urlopen(request, timeout=timeout) as response:
+        return response.status, response.headers.get("Content-Type", ""), response.read()
 
 
 def post_json(url, api_key, payload, timeout=120):
@@ -148,6 +159,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/config":
             public_config = {
+                "modelsUrl": CONFIG["models_url"],
                 "llmBaseUrl": CONFIG["llm_base_url"],
                 "llmModel": CONFIG["llm_model"],
                 "sttBaseUrl": CONFIG["stt_base_url"],
@@ -157,6 +169,9 @@ class Handler(SimpleHTTPRequestHandler):
                 "ttsVoice": CONFIG["tts_voice"],
             }
             write_json(self, 200, public_config)
+            return
+        if self.path == "/api/models":
+            self.handle_models()
             return
         return super().do_GET()
 
@@ -168,6 +183,8 @@ class Handler(SimpleHTTPRequestHandler):
                 self.handle_transcribe()
             elif self.path == "/api/tts":
                 self.handle_tts()
+            elif self.path == "/api/messages":
+                self.handle_messages()
             else:
                 write_json(self, 404, {"error": "Unknown API route"})
         except HTTPError as error:
@@ -177,6 +194,14 @@ class Handler(SimpleHTTPRequestHandler):
             write_json(self, 502, {"error": "Provider connection error", "detail": str(error)})
         except Exception as error:
             write_json(self, 500, {"error": "Local server error", "detail": str(error)})
+
+    def handle_models(self):
+        status, content_type, raw = get_raw(CONFIG["models_url"], CONFIG["api_key"])
+        self.send_response(status)
+        self.send_header("Content-Type", content_type or "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
 
     def handle_chat(self):
         payload = read_json(self)
@@ -240,6 +265,15 @@ class Handler(SimpleHTTPRequestHandler):
         )
         self.send_response(status)
         self.send_header("Content-Type", content_type or "audio/mpeg")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def handle_messages(self):
+        payload = read_json(self)
+        status, content_type, raw = post_json(CONFIG["messages_url"], CONFIG["api_key"], payload)
+        self.send_response(status)
+        self.send_header("Content-Type", content_type or "application/json")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
