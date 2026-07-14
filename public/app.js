@@ -286,7 +286,7 @@ async function askAssistant() {
         model: getSelectedModel(),
         chat_id: getActiveThread().chatId || state.chatId,
         temperature: Number(els.temperatureInput.value || 0.6),
-        max_tokens: 220,
+        max_tokens: 600,
         keep_alive: "30m",
         messages,
       }),

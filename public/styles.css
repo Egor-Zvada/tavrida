@@ -270,6 +270,7 @@ h2 {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding: 20px clamp(12px, 4vw, 56px);
+  scrollbar-gutter: stable;
 }
 
 .message {
@@ -287,19 +288,21 @@ h2 {
 
 .bubble {
   max-width: min(680px, 78%);
-  min-width: min(260px, 78%);
+  min-width: 0;
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--bubble-in);
   box-shadow: 0 1px 0 rgba(15, 34, 58, .08);
 }
 
-.message.out .bubble {
-  min-width: 0;
+.message:not(.out):not(.system) .bubble {
+  width: fit-content;
+  min-width: min(320px, 100%);
 }
 
 .bubble.has-audio {
-  min-width: min(360px, 78%);
+  width: min(680px, 100%);
+  min-width: min(420px, 100%);
 }
 
 .message-text {
@@ -340,7 +343,7 @@ h2 {
 .audio-reply {
   display: block;
   width: 100%;
-  min-width: 240px;
+  min-width: 0;
   margin-top: 8px;
 }
 
@@ -531,6 +534,12 @@ h2 {
   }
 
   .bubble {
+    max-width: 88%;
+  }
+
+  .message:not(.out):not(.system) .bubble,
+  .bubble.has-audio {
+    width: auto;
     max-width: 88%;
   }
 
