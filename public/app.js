@@ -1,6 +1,8 @@
 const state = {
   config: null,
   activeDialogId: "ai",
+  chatId: localStorage.getItem("chatId") || `vk-demo-${crypto.randomUUID()}`,
+  models: [],
   mediaRecorder: null,
   recordedChunks: [],
   messages: [
@@ -37,6 +39,7 @@ const els = {
 };
 
 const defaultSystemPrompt = "Ты дружелюбный русскоязычный ассистент VK-бота. Отвечай кратко, полезно и естественно для переписки.";
+localStorage.setItem("chatId", state.chatId);
 
 async function loadConfig() {
   const response = await fetch("/api/config");
@@ -145,9 +148,11 @@ async function askAssistant() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: els.modelInput.value.trim() || state.config.llmModel,
+        model: getSelectedModel(),
+        chat_id: state.chatId,
         temperature: Number(els.temperatureInput.value || 0.6),
-        max_tokens: 700,
+        max_tokens: 220,
+        keep_alive: "30m",
         messages,
       }),
     });
@@ -159,7 +164,7 @@ async function askAssistant() {
       await attachSpeech(loading.id, content);
     }
   } catch (error) {
-    updateMessage(loading.id, { content: `Ошибка: ${error.message}`, loading: false });
+    updateMessage(loading.id, { content: `Ошибка LLM: ${formatProviderError(error.message)}`, loading: false });
   }
 }
 
@@ -255,6 +260,19 @@ function cleanAssistantContent(value) {
     .trim();
 }
 
+function formatProviderError(message) {
+  if (message.includes("Model not found")) {
+    return "модель не найдена. Я сбросил выбор модели, попробуйте отправить сообщение еще раз.";
+  }
+  if (message.includes("permission to access this resource")) {
+    return "OpenWebUI отклонил chat_id или права API-ключа. Обновите страницу и попробуйте снова.";
+  }
+  if (message.includes("startswith")) {
+    return "OpenWebUI v0.9.5 упал из-за отсутствующего chat_id. Обновите страницу, чтобы загрузить фикс.";
+  }
+  return message;
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -294,9 +312,11 @@ async function loadModels() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || data.error || "Models request failed");
     const models = normalizeModels(data);
+    state.models = models;
     els.modelOptions.innerHTML = models
       .map((model) => `<option value="${escapeHtml(model)}"></option>`)
       .join("");
+    syncSelectedModel();
   } catch (error) {
     addMessage("system", `Список моделей не загрузился: ${error.message}`);
   }
@@ -313,6 +333,22 @@ function normalizeModels(data) {
     return data.models.map((item) => String(item.id || item.name || item)).filter(Boolean);
   }
   return [];
+}
+
+function syncSelectedModel() {
+  const saved = localStorage.getItem("llmModel");
+  const fallback = state.config?.llmModel || "qwen2.5:3b";
+  const next = state.models.includes(saved) ? saved : fallback;
+  els.modelInput.value = state.models.includes(next) ? next : (state.models[0] || next);
+  localStorage.setItem("llmModel", els.modelInput.value);
+}
+
+function getSelectedModel() {
+  const requested = els.modelInput.value.trim();
+  if (state.models.length && !state.models.includes(requested)) {
+    syncSelectedModel();
+  }
+  return els.modelInput.value.trim() || state.config.llmModel;
 }
 
 init();

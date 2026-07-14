@@ -144,6 +144,19 @@ def extension_for_mime(mime):
     return ".webm"
 
 
+def safe_chat_id(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return "local-demo-chat"
+    allowed = []
+    for char in raw[:80]:
+        if char.isalnum() or char in "-_":
+            allowed.append(char)
+        else:
+            allowed.append("-")
+    return "".join(allowed) or "local-demo-chat"
+
+
 class Handler(SimpleHTTPRequestHandler):
     server_version = "VKDemoBot/0.1"
 
@@ -208,12 +221,14 @@ class Handler(SimpleHTTPRequestHandler):
         messages = payload.get("messages") or []
         model = payload.get("model") or CONFIG["llm_model"]
         temperature = payload.get("temperature", 0.6)
-        max_tokens = payload.get("max_tokens", 700)
+        max_tokens = payload.get("max_tokens", 220)
         request_payload = {
             "model": model,
+            "chat_id": safe_chat_id(payload.get("chat_id")),
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "keep_alive": payload.get("keep_alive", "30m"),
             "stream": False,
         }
         status, content_type, raw = post_json(
