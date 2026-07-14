@@ -1,56 +1,63 @@
 const state = {
   config: null,
-  activeDialogId: localStorage.getItem("activeDialogId") || "ai",
-  chatId: localStorage.getItem("chatId") || `vk-demo-${crypto.randomUUID()}`,
+  activeDialogId: localStorage.getItem("citypoliaActiveDialogId") || "ai",
+  chatId: localStorage.getItem("citypoliaChatId") || `citypolia-demo-${crypto.randomUUID()}`,
   models: [],
   threads: {},
   mediaRecorder: null,
   recordedChunks: [],
 };
 
-const storageKey = "vkDemoThreadsV2";
+const storageKey = "citypoliaThreadsV1";
+const promptVersion = "citypolia-support-v1";
+
+const marketplaceLinks = [
+  "Ozon: https://www.ozon.ru/search/?text=%D0%A1%D0%98%D0%A2%D0%98%D0%9F%D0%9E%D0%9B%D0%98%D0%AF",
+  "Wildberries: https://www.wildberries.ru/catalog/0/search.aspx?search=%D0%A1%D0%98%D0%A2%D0%98%D0%9F%D0%9E%D0%9B%D0%98%D0%AF",
+  "Яндекс Маркет: https://market.yandex.ru/search?text=%D0%A1%D0%98%D0%A2%D0%98%D0%9F%D0%9E%D0%9B%D0%98%D0%AF",
+];
 
 const defaultThreads = {
   ai: {
     id: "ai",
-    title: "AI ассистент",
-    preview: "OpenAI-compatible demo",
+    title: "СитиГид",
+    preview: "Помощник по СИТИПОЛИИ",
     time: "сейчас",
-    initials: "AI",
+    initials: "СГ",
     bot: true,
     chatId: state.chatId,
     messages: [
       {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: "Привет. Я локальный демо-бот: пишите текстом или нажмите микрофон. Голос я распознаю в поле ввода, чтобы вы могли поправить текст перед отправкой.",
+        content: "Привет! Я СитиГид, помощник по настольной игре СИТИПОЛИЯ. Я могу рассказать об игре, помочь с правилами, провести подготовку к партии шаг за шагом и подсказать, где посмотреть игру на маркетплейсах. Отвечаю текстом и могу озвучивать ответы голосом. Напишите: \"подготовка\", \"краткие правила\", \"где купить\" или задайте свой вопрос.",
       },
     ],
   },
   support: {
     id: "support",
-    title: "VK demo support",
-    preview: "Локальный показ без доступа к VK",
+    title: "Подготовка к партии",
+    preview: "Пошаговый сценарий",
     time: "10:31",
-    initials: "VK",
+    initials: "П",
     bot: false,
     messages: [
-      { id: crypto.randomUUID(), role: "assistant", content: "Добрый день! Это демонстрационная переписка поддержки сообщества." },
-      { id: crypto.randomUUID(), role: "user", content: "Можно показать, как бот будет отвечать без доступа к VK?" },
-      { id: crypto.randomUUID(), role: "assistant", content: "Да. Эта страница имитирует VK Messenger, а backend уже подключен к LLM, TTS и STT через API." },
+      { id: crypto.randomUUID(), role: "assistant", content: "Начнем подготовку к партии. Шаг 1: положите игровое поле в центр стола, чтобы всем игрокам было удобно видеть клетки." },
+      { id: crypto.randomUUID(), role: "assistant", content: "Когда сделаете, напишите \"готово\". СитиГид даст следующий шаг, а не завалит всем списком сразу." },
+      { id: crypto.randomUUID(), role: "user", content: "готово" },
+      { id: crypto.randomUUID(), role: "assistant", content: "Шаг 2: разделите карточки объектов/собственности и положите их рядом с полем. Напишите \"сделал\", и пойдем дальше." },
     ],
   },
   ops: {
     id: "ops",
-    title: "LLM / STT / TTS",
-    preview: "Ollama, Whisper, Speech API",
+    title: "Где купить",
+    preview: "Ссылки на маркетплейсы",
     time: "09:48",
-    initials: "API",
+    initials: "₽",
     bot: false,
     messages: [
-      { id: crypto.randomUUID(), role: "assistant", content: "LLM: qwen2.5:3b через OpenWebUI gateway." },
-      { id: crypto.randomUUID(), role: "assistant", content: "STT: голос распознается в поле ввода, перед отправкой текст можно поправить." },
-      { id: crypto.randomUUID(), role: "assistant", content: "TTS: ответы можно озвучивать, голос на сервере один." },
+      { id: crypto.randomUUID(), role: "assistant", content: "СитиГид может дать ссылки на поиск СИТИПОЛИИ на маркетплейсах. Перед покупкой проверьте продавца, комплектацию и отзывы." },
+      { id: crypto.randomUUID(), role: "assistant", content: marketplaceLinks.join("\n") },
     ],
   },
 };
@@ -82,8 +89,55 @@ const els = {
   vkCallbackBox: document.querySelector("#vkCallbackBox"),
 };
 
-const defaultSystemPrompt = "Ты дружелюбный русскоязычный ассистент VK-бота. Отвечай кратко, полезно и естественно для переписки.";
-localStorage.setItem("chatId", state.chatId);
+const defaultSystemPrompt = `Ты СитиГид, дружелюбный бот поддержки настольной игры СИТИПОЛИЯ.
+Задача: помочь покупателю узнать об игре, быстро подготовиться к партии, разобраться с правилами и спокойно провести первую игру.
+
+Тон: теплый, уверенный, короткий. Пиши по-русски. Не называй СИТИПОЛИЮ чужим брендом и не сравнивай напрямую с другими играми, если пользователь сам не спросил.
+
+Что говорить об игре:
+- СИТИПОЛИЯ — семейная экономическая настольная игра про город, сделки, собственность, аренду, деньги и решения игроков.
+- Она подходит для дружеской или семейной партии, где игроки покупают объекты, получают доход, платят расходы и стараются прийти к победе.
+- Если пользователь спрашивает точные правила, номиналы денег, состав коробки или спорные ситуации, а данных не хватает, не выдумывай. Скажи: "посмотрите памятку/лист правил из коробки" или попроси фото/текст правила.
+
+Стартовое поведение:
+- Если пользователь здоровается или не знает, что спросить, представься: "Привет! Я СитиГид, помощник по СИТИПОЛИИ. Могу рассказать об игре, помочь с правилами или провести подготовку к партии шаг за шагом."
+- Предложи варианты: "подготовка", "краткие правила", "помоги с ситуацией", "где купить".
+
+Подготовка к игре:
+- Если пользователь пишет "подготовка", "начать игру", "подготовь к игре" или похожее, веди строго по одному шагу.
+- После каждого шага спрашивай: "Напишите 'готово', и пойдем дальше."
+- Если пользователь пишет "готово", "сделал", "дальше", продолжай следующий шаг.
+- Не выдавай весь список разом, если пользователь не попросил.
+- Если пользователь просит "все сразу", дай компактный список всех шагов.
+
+Базовые шаги подготовки:
+1. Положите игровое поле в центр стола, чтобы всем было удобно видеть клетки.
+2. Разделите карточки объектов/собственности и положите их рядом с полем.
+3. Перемешайте карточки событий/шансов, если они есть в вашем комплекте, и положите стопкой рубашкой вверх.
+4. Выберите фишки игроков и поставьте их на стартовую клетку.
+5. Выберите банкира или ответственного за банк.
+6. Разложите деньги по номиналам в банк. Стартовую сумму выдайте по памятке из коробки; если памятки нет под рукой, попроси пользователя написать номиналы и количество денег в комплекте.
+7. Определите первого игрока: броском кубика или договоренностью.
+8. Начинайте ход: бросок кубика, движение, выполнение действия клетки.
+
+Правила:
+- Если пользователь просит краткие правила, дай 5-8 пунктов.
+- Если спрашивает конкретную ситуацию, отвечай по ситуации и задавай один уточняющий вопрос, если не хватает данных.
+- Если пользователь прислал голосовое, оно уже распознано STT; работай с распознанным текстом как с вопросом.
+
+Покупка:
+- Если пользователь спрашивает где купить, дай ссылки:
+  ${marketplaceLinks.join("\n  ")}
+  Скажи проверить продавца, комплектность и отзывы.
+
+Ответы для VK:
+- При первом контакте скажи, что умеешь отвечать текстом и голосом.
+- Обычно сначала отвечай текстом. Голосовой ответ будет отправлен отдельным сообщением, если включен TTS.`;
+localStorage.setItem("citypoliaChatId", state.chatId);
+if (localStorage.getItem("systemPromptVersion") !== promptVersion) {
+  localStorage.setItem("systemPrompt", defaultSystemPrompt);
+  localStorage.setItem("systemPromptVersion", promptVersion);
+}
 state.threads = loadThreads();
 
 async function loadConfig() {
@@ -124,7 +178,7 @@ function renderDialogs() {
       `;
       button.addEventListener("click", () => {
         state.activeDialogId = dialog.id;
-        localStorage.setItem("activeDialogId", state.activeDialogId);
+        localStorage.setItem("citypoliaActiveDialogId", state.activeDialogId);
         renderChatHeader();
         renderDialogs();
         renderMessages({ forceBottom: true });
@@ -137,7 +191,7 @@ function renderChatHeader() {
   const thread = getActiveThread();
   document.querySelector("#chatName").textContent = thread.title;
   document.querySelector("#chatStatus").textContent = thread.bot
-    ? "OpenAI-compatible LLM, STT и TTS"
+    ? "Помощник СИТИПОЛИИ: правила, подготовка, покупки"
     : "Фейковая переписка для демо";
   document.querySelector(".bot-avatar").textContent = thread.initials;
 }
@@ -197,7 +251,7 @@ async function sendMessage() {
   if (getActiveThread().bot) {
     await askAssistant();
   } else {
-    addMessage("assistant", "Это фейковая переписка. Для LLM-ответа откройте чат AI ассистент.");
+    addMessage("assistant", "Это фейковая переписка. Для живого ответа СитиГида откройте чат \"СитиГид\".");
   }
 }
 
