@@ -293,7 +293,7 @@ def call_llm(messages, model, chat_id, system_prompt):
         "chat_id": safe_chat_id(chat_id),
         "messages": [{"role": "system", "content": system_prompt}] + messages,
         "temperature": 0.4,
-        "max_tokens": 600,
+        "max_tokens": 1200,
         "keep_alive": "30m",
         "stream": False,
     }
@@ -511,7 +511,7 @@ class Handler(SimpleHTTPRequestHandler):
         messages = payload.get("messages") or []
         model = payload.get("model") or CONFIG["llm_model"]
         temperature = payload.get("temperature", 0.6)
-        max_tokens = payload.get("max_tokens", 600)
+        max_tokens = payload.get("max_tokens", 1200)
         request_payload = {
             "model": model,
             "chat_id": safe_chat_id(payload.get("chat_id")),

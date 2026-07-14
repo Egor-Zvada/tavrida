@@ -40,7 +40,7 @@ textarea {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 72px minmax(260px, 360px) minmax(0, 1fr) 0;
+  grid-template-columns: 72px minmax(280px, 360px) minmax(0, 1fr) 0;
   width: 100vw;
   height: 100dvh;
   min-height: 0;
@@ -226,6 +226,7 @@ h2 {
 .chat-header {
   gap: 12px;
   background: #ffffff;
+  min-width: 0;
 }
 
 .bot-avatar {
@@ -237,6 +238,7 @@ h2 {
   min-width: 0;
   display: grid;
   gap: 2px;
+  flex: 1 1 auto;
 }
 
 .chat-title strong,
@@ -250,6 +252,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
   margin-left: auto;
 }
 
@@ -267,9 +270,10 @@ h2 {
   gap: 8px;
   min-height: 0;
   overflow: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 20px clamp(12px, 4vw, 56px);
+  padding: 20px clamp(16px, 4vw, 64px);
   scrollbar-gutter: stable;
 }
 
@@ -302,7 +306,7 @@ h2 {
 
 .bubble.has-audio {
   width: min(680px, 100%);
-  min-width: min(420px, 100%);
+  min-width: min(360px, 78%);
 }
 
 .message-text {
@@ -343,6 +347,7 @@ h2 {
 .audio-reply {
   display: block;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
   margin-top: 8px;
 }
@@ -397,6 +402,9 @@ h2 {
   transition: transform .18s ease;
   border-left: 1px solid var(--line);
   box-shadow: var(--shadow);
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .settings-panel.is-open {
@@ -496,7 +504,7 @@ h2 {
 
 @media (max-width: 820px) {
   .app-shell {
-    grid-template-columns: 0 minmax(92px, 34vw) minmax(0, 1fr);
+    grid-template-columns: 0 92px minmax(0, 1fr);
   }
 
   .rail {
@@ -515,6 +523,27 @@ h2 {
     padding: 0 8px;
   }
 
+  .chat-header {
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .bot-avatar {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+    font-size: 13px;
+  }
+
+  .chat-actions {
+    gap: 4px;
+  }
+
+  .chat-actions .icon-button {
+    width: 36px;
+    height: 36px;
+  }
+
   .search {
     margin: 8px;
   }
@@ -531,16 +560,17 @@ h2 {
 
   .messages {
     padding: 14px 10px;
+    scrollbar-gutter: auto;
   }
 
   .bubble {
-    max-width: 88%;
+    max-width: 92%;
   }
 
   .message:not(.out):not(.system) .bubble,
   .bubble.has-audio {
     width: auto;
-    max-width: 88%;
+    max-width: 92%;
   }
 
   .bubble,
@@ -550,5 +580,56 @@ h2 {
 
   .audio-reply {
     min-width: 0;
+  }
+
+  .composer {
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .composer .icon-button,
+  .composer .send-button {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 520px) {
+  .app-shell {
+    grid-template-columns: 0 76px minmax(0, 1fr);
+  }
+
+  .dialogs {
+    grid-template-rows: 56px 54px minmax(0, 1fr);
+  }
+
+  .dialogs-header,
+  .chat-header {
+    height: 56px;
+  }
+
+  .dialog-item {
+    min-height: 58px;
+    padding: 7px 4px;
+  }
+
+  .avatar {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+
+  .chat-title span {
+    display: none;
+  }
+
+  .bubble {
+    max-width: 96%;
+  }
+
+  .message:not(.out):not(.system) .bubble,
+  .bubble.has-audio {
+    max-width: 96%;
   }
 }
