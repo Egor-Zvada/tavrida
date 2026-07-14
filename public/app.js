@@ -210,8 +210,11 @@ function renderMessages(options = {}) {
     const item = document.createElement("article");
     item.className = `message ${message.role === "user" ? "out" : ""} ${message.role === "system" ? "system" : ""} ${message.loading ? "loading" : ""}`;
     const bubble = document.createElement("div");
-    bubble.className = "bubble";
-    bubble.textContent = message.content;
+    bubble.className = `bubble${message.audioUrl ? " has-audio" : ""}`;
+    const text = document.createElement("div");
+    text.className = "message-text";
+    text.textContent = message.content;
+    bubble.append(text);
     if (message.audioUrl) {
       const audio = document.createElement("audio");
       audio.className = "audio-reply";
