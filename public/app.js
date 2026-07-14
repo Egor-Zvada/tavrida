@@ -70,6 +70,7 @@ const els = {
   input: document.querySelector("#messageInput"),
   send: document.querySelector("#sendButton"),
   record: document.querySelector("#recordButton"),
+  clearChat: document.querySelector("#clearChatButton"),
   ttsToggle: document.querySelector("#ttsToggle"),
   settingsButton: document.querySelector("#settingsButton"),
   settingsPanel: document.querySelector("#settingsPanel"),
@@ -435,6 +436,7 @@ function escapeHtml(value) {
 function bindEvents() {
   els.send.addEventListener("click", sendMessage);
   els.record.addEventListener("click", toggleRecording);
+  els.clearChat.addEventListener("click", clearActiveChat);
   els.dialogSearch.addEventListener("input", renderDialogs);
   els.input.addEventListener("input", resizeInput);
   els.input.addEventListener("keydown", (event) => {
@@ -589,6 +591,29 @@ function saveThreads() {
 
 function getActiveThread() {
   return state.threads[state.activeDialogId] || state.threads.ai;
+}
+
+function clearActiveChat() {
+  const activeId = state.activeDialogId;
+  const current = getActiveThread();
+  const confirmed = confirm(`Очистить сообщения в чате "${current.title}"?`);
+  if (!confirmed) return;
+  const fresh = clone(defaultThreads[activeId] || defaultThreads.ai);
+  state.threads[activeId] = {
+    ...current,
+    preview: fresh.preview,
+    time: "сейчас",
+    messages: fresh.messages,
+    chatId: activeId === "ai" ? `citypolia-demo-${crypto.randomUUID()}` : current.chatId,
+  };
+  if (activeId === "ai") {
+    state.chatId = state.threads[activeId].chatId;
+    localStorage.setItem("citypoliaChatId", state.chatId);
+  }
+  saveThreads();
+  renderChatHeader();
+  renderDialogs();
+  renderMessages({ forceBottom: true });
 }
 
 function touchActiveThread(preview) {
