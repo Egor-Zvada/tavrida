@@ -71,6 +71,15 @@ const els = {
   temperatureInput: document.querySelector("#temperatureInput"),
   systemPrompt: document.querySelector("#systemPrompt"),
   endpointList: document.querySelector("#endpointList"),
+  vkEnabled: document.querySelector("#vkEnabled"),
+  vkGroupId: document.querySelector("#vkGroupId"),
+  vkToken: document.querySelector("#vkToken"),
+  vkSecret: document.querySelector("#vkSecret"),
+  vkConfirmation: document.querySelector("#vkConfirmation"),
+  vkSendText: document.querySelector("#vkSendText"),
+  vkSendVoice: document.querySelector("#vkSendVoice"),
+  vkSaveButton: document.querySelector("#vkSaveButton"),
+  vkCallbackBox: document.querySelector("#vkCallbackBox"),
 };
 
 const defaultSystemPrompt = "Ты дружелюбный русскоязычный ассистент VK-бота. Отвечай кратко, полезно и естественно для переписки.";
@@ -374,6 +383,7 @@ function bindEvents() {
   });
   els.settingsButton.addEventListener("click", () => els.settingsPanel.classList.add("is-open"));
   els.closeSettings.addEventListener("click", () => els.settingsPanel.classList.remove("is-open"));
+  els.vkSaveButton.addEventListener("click", saveVkSettings);
 }
 
 async function init() {
@@ -385,7 +395,60 @@ async function init() {
   renderDialogs();
   renderMessages({ forceBottom: true });
   await loadConfig();
+  await loadVkSettings();
   await loadModels();
+}
+
+async function loadVkSettings() {
+  try {
+    const response = await fetch("/api/vk/settings");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "VK settings request failed");
+    els.vkEnabled.checked = Boolean(data.enabled);
+    els.vkGroupId.value = data.groupId || "";
+    els.vkSecret.value = data.secret || "";
+    els.vkConfirmation.value = data.confirmation || "";
+    els.vkSendText.checked = data.sendText !== false;
+    els.vkSendVoice.checked = data.sendVoice !== false;
+    renderVkCallback(data);
+  } catch (error) {
+    els.vkCallbackBox.textContent = `VK настройки не загрузились: ${error.message}`;
+  }
+}
+
+async function saveVkSettings() {
+  els.vkSaveButton.disabled = true;
+  try {
+    const response = await fetch("/api/vk/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        enabled: els.vkEnabled.checked,
+        groupId: els.vkGroupId.value.trim(),
+        token: els.vkToken.value.trim(),
+        secret: els.vkSecret.value.trim(),
+        confirmation: els.vkConfirmation.value.trim(),
+        sendText: els.vkSendText.checked,
+        sendVoice: els.vkSendVoice.checked,
+        model: getSelectedModel(),
+        systemPrompt: els.systemPrompt.value.trim() || defaultSystemPrompt,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "VK settings save failed");
+    els.vkToken.value = "";
+    renderVkCallback(data, "VK настройки сохранены.");
+  } catch (error) {
+    els.vkCallbackBox.textContent = `VK настройки не сохранились: ${error.message}`;
+  } finally {
+    els.vkSaveButton.disabled = false;
+  }
+}
+
+function renderVkCallback(data, prefix = "") {
+  const callbackUrl = `${location.origin}${data.callbackPath || "/api/vk/callback"}`;
+  const tokenState = data.tokenPresent ? "токен сохранен" : "токен не задан";
+  els.vkCallbackBox.textContent = `${prefix ? `${prefix} ` : ""}Callback: ${callbackUrl}. ${tokenState}.`;
 }
 
 async function loadModels() {

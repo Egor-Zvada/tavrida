@@ -1,4 +1,5 @@
 .env
+vk_settings.local.json
 __pycache__/
 *.pyc
 work/

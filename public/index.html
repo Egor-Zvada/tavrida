@@ -80,6 +80,39 @@
           <span>Системная инструкция</span>
           <textarea id="systemPrompt" rows="7"></textarea>
         </label>
+        <section class="settings-section">
+          <h3>VK Callback API</h3>
+          <label class="checkbox-row">
+            <input id="vkEnabled" type="checkbox">
+            <span>Включить VK</span>
+          </label>
+          <label>
+            <span>Group ID</span>
+            <input id="vkGroupId" type="text" autocomplete="off" placeholder="123456789">
+          </label>
+          <label>
+            <span>Токен сообщества</span>
+            <input id="vkToken" type="password" autocomplete="off" placeholder="Оставьте пустым, чтобы не менять">
+          </label>
+          <label>
+            <span>Secret</span>
+            <input id="vkSecret" type="text" autocomplete="off">
+          </label>
+          <label>
+            <span>Confirmation</span>
+            <input id="vkConfirmation" type="text" autocomplete="off">
+          </label>
+          <label class="checkbox-row">
+            <input id="vkSendText" type="checkbox" checked>
+            <span>Сначала отвечать текстом</span>
+          </label>
+          <label class="checkbox-row">
+            <input id="vkSendVoice" type="checkbox" checked>
+            <span>Потом отправлять голосовое</span>
+          </label>
+          <button class="settings-save" id="vkSaveButton" type="button">Сохранить VK</button>
+          <div class="callback-box" id="vkCallbackBox"></div>
+        </section>
         <div class="endpoint-list" id="endpointList"></div>
       </aside>
     </div>

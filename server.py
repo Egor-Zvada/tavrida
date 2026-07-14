@@ -3,16 +3,19 @@ import base64
 import json
 import os
 import sys
+import threading
 import time
 import uuid
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
+VK_SETTINGS_PATH = ROOT / "vk_settings.local.json"
 
 
 def load_env(path: Path) -> None:
@@ -47,6 +50,22 @@ CONFIG = {
     "port": int(os.getenv("PORT", "8080")),
 }
 
+DEFAULT_VK_SETTINGS = {
+    "enabled": False,
+    "groupId": "",
+    "token": "",
+    "secret": "",
+    "confirmation": "",
+    "apiVersion": "5.199",
+    "sendText": True,
+    "sendVoice": True,
+    "model": CONFIG["llm_model"],
+    "systemPrompt": (
+        "Ты помощник сообщества VK. Отвечай по-русски, коротко и полезно. "
+        "Сначала дай текстовый ответ. Не рассуждай вслух."
+    ),
+}
+
 
 def read_json(handler):
     length = int(handler.headers.get("Content-Length", "0"))
@@ -65,11 +84,64 @@ def write_json(handler, status, payload):
     handler.wfile.write(body)
 
 
+def write_text(handler, status, text):
+    body = str(text).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "text/plain; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def bearer_headers(api_key):
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     return headers
+
+
+def load_vk_settings():
+    if not VK_SETTINGS_PATH.exists():
+        return dict(DEFAULT_VK_SETTINGS)
+    try:
+        saved = json.loads(VK_SETTINGS_PATH.read_text(encoding="utf-8"))
+        return {**DEFAULT_VK_SETTINGS, **saved}
+    except Exception:
+        return dict(DEFAULT_VK_SETTINGS)
+
+
+def save_vk_settings(payload):
+    current = load_vk_settings()
+    next_settings = {**current}
+    for key in DEFAULT_VK_SETTINGS:
+        if key == "token" and payload.get("token", "") == "":
+            continue
+        if key in payload:
+            next_settings[key] = payload[key]
+    VK_SETTINGS_PATH.write_text(json.dumps(next_settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    return next_settings
+
+
+def public_vk_settings(settings):
+    return {
+        "enabled": bool(settings.get("enabled")),
+        "groupId": settings.get("groupId", ""),
+        "tokenPresent": bool(settings.get("token")),
+        "secret": settings.get("secret", ""),
+        "confirmation": settings.get("confirmation", ""),
+        "apiVersion": settings.get("apiVersion", DEFAULT_VK_SETTINGS["apiVersion"]),
+        "sendText": bool(settings.get("sendText", True)),
+        "sendVoice": bool(settings.get("sendVoice", True)),
+        "model": settings.get("model", CONFIG["llm_model"]),
+        "systemPrompt": settings.get("systemPrompt", DEFAULT_VK_SETTINGS["systemPrompt"]),
+        "callbackPath": "/api/vk/callback",
+    }
+
+
+def get_binary(url, timeout=60):
+    request = Request(url, headers={"User-Agent": "VKDemoBot/0.1"}, method="GET")
+    with urlopen(request, timeout=timeout) as response:
+        return response.headers.get("Content-Type", "application/octet-stream"), response.read()
 
 
 def get_raw(url, api_key, timeout=30):
@@ -88,6 +160,18 @@ def post_json(url, api_key, payload, timeout=120):
         raw = response.read()
         content_type = response.headers.get("Content-Type", "")
         return response.status, content_type, raw
+
+
+def post_form(url, fields, timeout=60):
+    body = urlencode(fields).encode("utf-8")
+    request = Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout) as response:
+        return response.status, response.headers.get("Content-Type", ""), response.read()
 
 
 def post_multipart(url, api_key, fields, files, timeout=120):
@@ -157,6 +241,159 @@ def safe_chat_id(value):
     return "".join(allowed) or "local-demo-chat"
 
 
+def call_llm(messages, model, chat_id, system_prompt):
+    payload = {
+        "model": model or CONFIG["llm_model"],
+        "chat_id": safe_chat_id(chat_id),
+        "messages": [{"role": "system", "content": system_prompt}] + messages,
+        "temperature": 0.4,
+        "max_tokens": 220,
+        "keep_alive": "30m",
+        "stream": False,
+    }
+    _, _, raw = post_json(CONFIG["llm_base_url"] + "/chat/completions", CONFIG["llm_api_key"], payload)
+    data = json.loads(raw.decode("utf-8"))
+    return clean_assistant_text(data.get("choices", [{}])[0].get("message", {}).get("content", ""))
+
+
+def clean_assistant_text(text):
+    value = str(text or "")
+    lower = value.lower()
+    while "<think>" in lower:
+        start = lower.find("<think>")
+        end = lower.find("</think>", start)
+        if end == -1:
+            value = value[:start]
+            break
+        value = value[:start] + value[end + len("</think>"):]
+        lower = value.lower()
+    return value.strip()
+
+
+def transcribe_audio_bytes(data, mime):
+    ext = extension_for_mime(mime)
+    _, _, raw = post_multipart(
+        CONFIG["stt_base_url"] + "/audio/transcriptions",
+        CONFIG["stt_api_key"],
+        {"model": CONFIG["stt_model"]},
+        {"file": (f"vk-voice-{int(time.time())}{ext}", mime, data)},
+    )
+    result = json.loads(raw.decode("utf-8"))
+    return str(result.get("text") or result.get("transcription") or "").strip()
+
+
+def synthesize_speech(text):
+    payload = {
+        "model": CONFIG["tts_model"],
+        "voice": CONFIG["tts_voice"],
+        "input": text,
+    }
+    _, content_type, raw = post_json(CONFIG["tts_base_url"] + "/audio/speech", CONFIG["tts_api_key"], payload)
+    return content_type or "audio/mpeg", raw
+
+
+def vk_api(settings, method, fields):
+    token = settings.get("token")
+    if not token:
+        raise RuntimeError("VK token is not configured")
+    payload = {
+        **fields,
+        "access_token": token,
+        "v": settings.get("apiVersion") or DEFAULT_VK_SETTINGS["apiVersion"],
+    }
+    _, _, raw = post_form(f"https://api.vk.com/method/{method}", payload)
+    data = json.loads(raw.decode("utf-8"))
+    if "error" in data:
+        raise RuntimeError(data["error"].get("error_msg", "VK API error"))
+    return data.get("response")
+
+
+def vk_send_text(settings, peer_id, message):
+    return vk_api(
+        settings,
+        "messages.send",
+        {
+            "peer_id": peer_id,
+            "random_id": int(time.time() * 1000),
+            "message": message,
+        },
+    )
+
+
+def vk_send_voice(settings, peer_id, text):
+    mime, audio = synthesize_speech(text)
+    upload = vk_api(settings, "docs.getMessagesUploadServer", {"type": "audio_message", "peer_id": peer_id})
+    upload_url = upload.get("upload_url")
+    if not upload_url:
+        raise RuntimeError("VK did not return upload_url")
+    ext = extension_for_mime(mime)
+    _, _, raw = post_multipart(upload_url, "", {}, {"file": (f"answer{ext}", mime, audio)})
+    uploaded = json.loads(raw.decode("utf-8"))
+    saved = vk_api(settings, "docs.save", {"file": uploaded.get("file", "")})
+    doc = (saved.get("audio_message") or saved.get("doc") or saved.get("docs", [{}])[0])
+    owner_id = doc.get("owner_id")
+    doc_id = doc.get("id")
+    access_key = doc.get("access_key")
+    attachment = f"doc{owner_id}_{doc_id}"
+    if access_key:
+        attachment += f"_{access_key}"
+    return vk_api(
+        settings,
+        "messages.send",
+        {
+            "peer_id": peer_id,
+            "random_id": int(time.time() * 1000) + 1,
+            "attachment": attachment,
+        },
+    )
+
+
+def extract_vk_voice_url(message):
+    for attachment in message.get("attachments", []) or []:
+        kind = attachment.get("type")
+        payload = attachment.get(kind, {}) if kind else {}
+        if kind == "audio_message":
+            return payload.get("link_mp3") or payload.get("link_ogg")
+    return ""
+
+
+def process_vk_message(event, settings):
+    message = (event.get("object") or {}).get("message") or event.get("object") or {}
+    peer_id = message.get("peer_id")
+    if not peer_id:
+        return
+    text = str(message.get("text") or "").strip()
+    voice_url = extract_vk_voice_url(message)
+    if voice_url:
+        try:
+            mime, data = get_binary(voice_url)
+            text = transcribe_audio_bytes(data, mime)
+        except Exception:
+            vk_send_text(settings, peer_id, "Не получилось распознать голосовое сообщение. Напишите текстом, пожалуйста.")
+            return
+        if not text:
+            vk_send_text(settings, peer_id, "Не получилось распознать голосовое сообщение. Напишите текстом, пожалуйста.")
+            return
+    if not text:
+        vk_send_text(settings, peer_id, "Я отвечаю на текстовые и голосовые сообщения. Задайте вопрос текстом или голосом.")
+        return
+    answer = call_llm(
+        [{"role": "user", "content": text}],
+        settings.get("model") or CONFIG["llm_model"],
+        f"vk-peer-{peer_id}-{uuid.uuid4().hex[:8]}",
+        settings.get("systemPrompt") or DEFAULT_VK_SETTINGS["systemPrompt"],
+    )
+    if not answer:
+        answer = "Не смог подготовить ответ. Попробуйте переформулировать вопрос."
+    if settings.get("sendText", True):
+        vk_send_text(settings, peer_id, answer)
+    if settings.get("sendVoice", True):
+        try:
+            vk_send_voice(settings, peer_id, answer)
+        except Exception as error:
+            sys.stderr.write(f"VK voice reply failed: {error}\n")
+
+
 class Handler(SimpleHTTPRequestHandler):
     server_version = "VKDemoBot/0.1"
 
@@ -186,6 +423,9 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/models":
             self.handle_models()
             return
+        if self.path == "/api/vk/settings":
+            write_json(self, 200, public_vk_settings(load_vk_settings()))
+            return
         return super().do_GET()
 
     def do_POST(self):
@@ -198,6 +438,10 @@ class Handler(SimpleHTTPRequestHandler):
                 self.handle_tts()
             elif self.path == "/api/messages":
                 self.handle_messages()
+            elif self.path == "/api/vk/settings":
+                self.handle_vk_settings()
+            elif self.path == "/api/vk/callback":
+                self.handle_vk_callback()
             else:
                 write_json(self, 404, {"error": "Unknown API route"})
         except HTTPError as error:
@@ -292,6 +536,28 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
         self.wfile.write(raw)
+
+    def handle_vk_settings(self):
+        payload = read_json(self)
+        settings = save_vk_settings(payload)
+        write_json(self, 200, public_vk_settings(settings))
+
+    def handle_vk_callback(self):
+        payload = read_json(self)
+        settings = load_vk_settings()
+        if payload.get("type") == "confirmation":
+            write_text(self, 200, settings.get("confirmation", ""))
+            return
+        if not settings.get("enabled"):
+            write_text(self, 200, "ok")
+            return
+        secret = settings.get("secret")
+        if secret and payload.get("secret") != secret:
+            write_text(self, 200, "ok")
+            return
+        if payload.get("type") == "message_new":
+            threading.Thread(target=process_vk_message, args=(payload, settings), daemon=True).start()
+        write_text(self, 200, "ok")
 
 
 def main():
