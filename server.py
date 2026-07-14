@@ -38,7 +38,7 @@ CONFIG = {
     "messages_url": os.getenv("MESSAGES_URL", "https://dev.egor-zvada.ru/api/v1/messages"),
     "llm_base_url": os.getenv("LLM_BASE_URL", "https://dev.egor-zvada.ru/api").rstrip("/"),
     "llm_api_key": os.getenv("LLM_API_KEY", os.getenv("API_KEY", "")),
-    "llm_model": os.getenv("LLM_MODEL", "qwen2.5:3b"),
+    "llm_model": os.getenv("LLM_MODEL", "deepseek-v4-flash"),
     "stt_base_url": os.getenv("STT_BASE_URL", "https://dev.egor-zvada.ru/api/v1").rstrip("/"),
     "stt_api_key": os.getenv("STT_API_KEY", os.getenv("API_KEY", "")),
     "stt_model": os.getenv("STT_MODEL", "whisper-1"),

@@ -48,8 +48,8 @@ MESSAGES_URL=https://dev.egor-zvada.ru/api/v1/messages
 API_KEY=put-your-api-key-here
 ```
 
-На указанном Ollama endpoint обнаружены модели `qwen2.5:3b`, `gpt-oss:20b` и `deepseek-r1:8b`.
-По умолчанию включена `qwen2.5:3b`: она заметно быстрее на CPU и лучше подходит для русскоязычного VK-бота.
+Через gateway доступны модели, включая `deepseek-v4-flash`, `deepseek-v4-pro`, `qwen2.5:3b` и `gpt-oss:20b`.
+По умолчанию включена `deepseek-v4-flash`.
 Если нужна другая модель, поменяйте `LLM_MODEL` в `.env` или в настройках интерфейса.
 
 ## Дальше

@@ -10,6 +10,7 @@ const state = {
 
 const storageKey = "citypoliaThreadsV1";
 const promptVersion = "citypolia-support-v1";
+const modelVersion = "deepseek-v4-flash-v1";
 
 const marketplaceLinks = [
   "Ozon: https://www.ozon.ru/search/?text=%D0%A1%D0%98%D0%A2%D0%98%D0%9F%D0%9E%D0%9B%D0%98%D0%AF",
@@ -137,6 +138,10 @@ localStorage.setItem("citypoliaChatId", state.chatId);
 if (localStorage.getItem("systemPromptVersion") !== promptVersion) {
   localStorage.setItem("systemPrompt", defaultSystemPrompt);
   localStorage.setItem("systemPromptVersion", promptVersion);
+}
+if (localStorage.getItem("modelVersion") !== modelVersion) {
+  localStorage.setItem("llmModel", "deepseek-v4-flash");
+  localStorage.setItem("modelVersion", modelVersion);
 }
 state.threads = loadThreads();
 
@@ -405,6 +410,9 @@ function formatProviderError(message) {
   if (message.includes("Model not found")) {
     return "модель не найдена. Я сбросил выбор модели, попробуйте отправить сообщение еще раз.";
   }
+  if (message.includes("Insufficient Balance")) {
+    return "у провайдера модели недостаточно баланса. Пополните баланс или временно выберите другую модель.";
+  }
   if (message.includes("permission to access this resource")) {
     return "OpenWebUI отклонил chat_id или права API-ключа. Обновите страницу и попробуйте снова.";
   }
@@ -536,7 +544,7 @@ function normalizeModels(data) {
 
 function syncSelectedModel() {
   const saved = localStorage.getItem("llmModel");
-  const fallback = state.config?.llmModel || "qwen2.5:3b";
+  const fallback = state.config?.llmModel || "deepseek-v4-flash";
   const next = state.models.includes(saved) ? saved : fallback;
   els.modelInput.value = state.models.includes(next) ? next : (state.models[0] || next);
   localStorage.setItem("llmModel", els.modelInput.value);
