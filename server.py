@@ -33,7 +33,7 @@ load_env(ROOT / ".env")
 CONFIG = {
     "llm_base_url": os.getenv("LLM_BASE_URL", "http://185.74.228.13:11434/v1").rstrip("/"),
     "llm_api_key": os.getenv("LLM_API_KEY", "ollama"),
-    "llm_model": os.getenv("LLM_MODEL", "gpt-oss:20b"),
+    "llm_model": os.getenv("LLM_MODEL", "qwen2.5:3b"),
     "stt_base_url": os.getenv("STT_BASE_URL", "http://185.74.228.13:11000/v1").rstrip("/"),
     "stt_api_key": os.getenv("STT_API_KEY", "M00nglow"),
     "stt_model": os.getenv("STT_MODEL", "whisper-1"),
