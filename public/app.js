@@ -9,7 +9,7 @@ const state = {
 };
 
 const storageKey = "citypoliaThreadsV1";
-const promptVersion = "citypolia-youth-tone-v3";
+const promptVersion = "citypolia-youth-tone-v4";
 const modelVersion = "deepseek-v4-flash-v1";
 
 const preparationSteps = [
@@ -120,7 +120,7 @@ const els = {
 const defaultSystemPrompt = `Ты СитиГид, дружелюбный бот поддержки настольной игры СИТИПОЛИЯ.
 Задача: помочь покупателю узнать об игре, быстро подготовиться к партии, разобраться с правилами и спокойно провести первую игру.
 
-Тон: молодежный, дружелюбный, живой, уверенный и немного кринжовый в хорошем смысле. Пиши по-русски простыми фразами, без канцелярита. Можно использовать разговорные слова и легкие мемные обороты вроде "окей", "давай", "супер", "разрулим", "залетаем", "по шагам", "имба", "без паники", "сейчас будет база". Кринж допустим, даже желателен, но без грубости, токсичности, оскорблений и перегруза эмодзи. Не называй СИТИПОЛИЮ чужим брендом и не сравнивай напрямую с другими играми, если пользователь сам не спросил.
+Тон: молодежный, дружелюбный, живой, уверенный и слегка кринжовый в хорошем смысле. Пиши по-русски простыми фразами, без канцелярита. Можно иногда использовать разговорные слова и легкие мемные обороты вроде "окей", "давай", "супер", "разрулим", "по шагам", "без паники", "сейчас будет база". Кринж допустим, но дозированно: примерно 1-2 таких оборота на ответ, без грубости, токсичности, оскорблений и перегруза эмодзи. Не называй СИТИПОЛИЮ чужим брендом и не сравнивай напрямую с другими играми, если пользователь сам не спросил.
 
 Что говорить об игре:
 - СИТИПОЛИЯ — семейная экономическая настольная игра про город, сделки, собственность, аренду, деньги и решения игроков.
@@ -254,7 +254,7 @@ function renderMessages(options = {}) {
     bubble.className = `bubble${message.audioUrl ? " has-audio" : ""}`;
     const text = document.createElement("div");
     text.className = "message-text";
-    text.textContent = message.content;
+    renderMessageContent(text, message.content);
     bubble.append(text);
     if (message.audioUrl) {
       const audio = document.createElement("audio");
@@ -269,6 +269,56 @@ function renderMessages(options = {}) {
   if (shouldStickToBottom) {
     scrollMessagesToBottom();
   }
+}
+
+function renderMessageContent(element, content) {
+  element.textContent = "";
+  const lines = String(content || "").split("\n");
+  let list = null;
+  const closeList = () => {
+    if (list) {
+      element.append(list);
+      list = null;
+    }
+  };
+  lines.forEach((line, index) => {
+    const ordered = line.match(/^(\d+)\.\s+(.+)$/);
+    const unordered = line.match(/^[-*]\s+(.+)$/);
+    if (ordered || unordered) {
+      const nextTag = ordered ? "ol" : "ul";
+      if (!list || list.tagName.toLowerCase() !== nextTag) {
+        closeList();
+        list = document.createElement(nextTag);
+      }
+      const item = document.createElement("li");
+      appendInlineMarkdown(item, ordered ? ordered[2] : unordered[1]);
+      list.append(item);
+      return;
+    }
+    closeList();
+    if (line.trim()) {
+      const paragraph = document.createElement("p");
+      appendInlineMarkdown(paragraph, line);
+      element.append(paragraph);
+    } else if (index > 0 && index < lines.length - 1) {
+      element.append(document.createElement("br"));
+    }
+  });
+  closeList();
+}
+
+function appendInlineMarkdown(parent, value) {
+  const parts = String(value).split(/(\*\*[^*]+\*\*)/g);
+  parts.forEach((part) => {
+    if (!part) return;
+    if (part.startsWith("**") && part.endsWith("**")) {
+      const strong = document.createElement("strong");
+      strong.textContent = part.slice(2, -2);
+      parent.append(strong);
+      return;
+    }
+    parent.append(document.createTextNode(part));
+  });
 }
 
 function addMessage(role, content, extra = {}) {

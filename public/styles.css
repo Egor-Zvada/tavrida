@@ -317,6 +317,36 @@ h2 {
   word-break: normal;
 }
 
+.message-text p {
+  margin: 0 0 8px;
+}
+
+.message-text p:last-child,
+.message-text ol:last-child,
+.message-text ul:last-child {
+  margin-bottom: 0;
+}
+
+.message-text ol,
+.message-text ul {
+  margin: 0 0 8px;
+  padding-left: 22px;
+  white-space: normal;
+}
+
+.message-text li {
+  margin: 0 0 7px;
+  padding-left: 2px;
+}
+
+.message-text li:last-child {
+  margin-bottom: 0;
+}
+
+.message-text strong {
+  font-weight: 750;
+}
+
 .message.out .bubble {
   background: var(--bubble-out);
 }
