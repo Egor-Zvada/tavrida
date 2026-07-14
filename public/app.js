@@ -12,11 +12,27 @@ const storageKey = "citypoliaThreadsV1";
 const promptVersion = "citypolia-support-v1";
 const modelVersion = "deepseek-v4-flash-v1";
 
+const preparationSteps = [
+  "Шаг 1: положите игровое поле в центр стола, чтобы всем игрокам было удобно видеть клетки. Напишите \"готово\", и пойдем дальше.",
+  "Шаг 2: разделите карточки объектов/собственности и положите их рядом с полем. Напишите \"сделал\", и продолжим.",
+  "Шаг 3: если в комплекте есть карточки событий или шансов, перемешайте их и положите стопкой рубашкой вверх. Напишите \"готово\".",
+  "Шаг 4: выберите фишки игроков и поставьте их на стартовую клетку. Когда фишки на месте, напишите \"готово\".",
+  "Шаг 5: выберите банкира или человека, который будет отвечать за банк. Напишите \"сделал\".",
+  "Шаг 6: разложите деньги по номиналам в банк. Стартовую сумму лучше выдать по памятке из коробки. Если памятки нет, напишите номиналы и количество купюр, помогу раздать аккуратно.",
+  "Шаг 7: определите первого игрока: броском кубика или по договоренности. Напишите \"готово\", и начнем первый ход.",
+  "Шаг 8: игра началась. Первый игрок бросает кубик, двигает фишку на выпавшее количество клеток и выполняет действие клетки. Если возникнет спорная ситуация, опишите ее одним сообщением.",
+];
+
 const marketplaceLinks = [
   "Ozon: https://www.ozon.ru/search/?text=%D0%A1%D0%98%D0%A2%D0%98%D0%9F%D0%9E%D0%9B%D0%98%D0%AF",
   "Wildberries: https://www.wildberries.ru/catalog/0/search.aspx?search=%D0%A1%D0%98%D0%A2%D0%98%D0%9F%D0%9E%D0%9B%D0%98%D0%AF",
   "Яндекс Маркет: https://market.yandex.ru/search?text=%D0%A1%D0%98%D0%A2%D0%98%D0%9F%D0%9E%D0%9B%D0%98%D0%AF",
 ];
+
+const quickReplies = {
+  rules: `Кратко правила СИТИПОЛИИ:\n\n1. Игроки ходят по очереди: бросают кубик, двигают фишку и выполняют действие клетки.\n2. Если клетка с объектом свободна, игрок может купить ее по правилам из коробки.\n3. Если объект уже принадлежит другому игроку, обычно нужно выполнить платеж/аренду по карточке объекта.\n4. Карточки событий/шансов выполняются сразу, если они есть в вашем комплекте.\n5. Деньги и объекты ведет банк или выбранный банкир.\n6. Цель партии — принимать выгодные решения и остаться в сильной финансовой позиции.\n\nЕсли хотите, могу провести подготовку к партии пошагово.`,
+  buy: `Где посмотреть СИТИПОЛИЮ:\n\n${marketplaceLinks.join("\n")}\n\nПеред покупкой проверьте продавца, комплектность, фотографии коробки и отзывы.`,
+};
 
 const defaultThreads = {
   ai: {
@@ -71,6 +87,7 @@ const els = {
   send: document.querySelector("#sendButton"),
   record: document.querySelector("#recordButton"),
   clearChat: document.querySelector("#clearChatButton"),
+  quickActions: document.querySelector(".quick-actions"),
   ttsToggle: document.querySelector("#ttsToggle"),
   settingsButton: document.querySelector("#settingsButton"),
   settingsPanel: document.querySelector("#settingsPanel"),
@@ -258,10 +275,102 @@ async function sendMessage() {
   resizeInput();
   addMessage("user", text);
   if (getActiveThread().bot) {
+    if (await handleLocalIntent(text)) return;
     await askAssistant();
   } else {
     addMessage("assistant", "Это фейковая переписка. Для живого ответа СитиГида откройте чат \"СитиГид\".");
   }
+}
+
+async function handleQuickAction(action) {
+  ensureBotThread();
+  if (action === "situation") {
+    els.input.value = "Помоги с ситуацией: ";
+    resizeInput();
+    els.input.focus();
+    els.input.setSelectionRange(els.input.value.length, els.input.value.length);
+    return;
+  }
+  const textByAction = {
+    prep: "Подготовить игру",
+    rules: "Краткие правила",
+    buy: "Где купить",
+    next: "Что дальше?",
+  };
+  const text = textByAction[action];
+  if (!text) return;
+  addMessage("user", text);
+  if (getActiveThread().bot && await handleLocalIntent(text)) return;
+  if (getActiveThread().bot) {
+    await askAssistant();
+  }
+}
+
+function ensureBotThread() {
+  if (getActiveThread().bot) return;
+  state.activeDialogId = "ai";
+  localStorage.setItem("citypoliaActiveDialogId", state.activeDialogId);
+  renderChatHeader();
+  renderDialogs();
+  renderMessages({ forceBottom: true });
+}
+
+async function handleLocalIntent(text) {
+  const normalized = text.toLowerCase().replace(/ё/g, "е").trim();
+  if (/(все сразу|полный список|списком|весь список)/.test(normalized) && /(подготов|шаг|игр)/.test(normalized)) {
+    await sendAssistantText(`Полный список подготовки:\n\n${preparationSteps.map((step) => step.replace(/^Шаг /, "")).join("\n")}`);
+    return true;
+  }
+  if (/(подготов|начать игру|подготовить игру|проведи|вести партию)/.test(normalized)) {
+    await startPreparationGuide();
+    return true;
+  }
+  if (/(готово|сделал|сделала|дальше|что дальше|следующий|продолжай|(^|\s)(ок|окей)($|\s|[.!?]))/.test(normalized)) {
+    await continuePreparationGuide();
+    return true;
+  }
+  if (/(кратк.*правил|правила кратко|как играть|объясни правила)/.test(normalized)) {
+    await sendAssistantText(quickReplies.rules);
+    return true;
+  }
+  if (/(где купить|купить|маркетплейс|ozon|wildberries|вайлдберриз|яндекс)/.test(normalized)) {
+    await sendAssistantText(quickReplies.buy);
+    return true;
+  }
+  return false;
+}
+
+async function startPreparationGuide() {
+  const thread = getActiveThread();
+  thread.prepStep = 0;
+  await sendPreparationStep();
+}
+
+async function continuePreparationGuide() {
+  const thread = getActiveThread();
+  if (typeof thread.prepStep !== "number") {
+    await sendAssistantText("Можем начать подготовку к партии. Нажмите «Подготовить игру» или напишите «подготовка», и я поведу по шагам.");
+    return;
+  }
+  await sendPreparationStep();
+}
+
+async function sendPreparationStep() {
+  const thread = getActiveThread();
+  const stepIndex = Math.min(Math.max(thread.prepStep || 0, 0), preparationSteps.length - 1);
+  thread.prepStep = stepIndex + 1;
+  if (stepIndex >= preparationSteps.length - 1) {
+    thread.prepStep = null;
+  }
+  await sendAssistantText(preparationSteps[stepIndex]);
+}
+
+async function sendAssistantText(content, extra = {}) {
+  const message = addMessage("assistant", content, extra);
+  if (els.ttsToggle.checked) {
+    await attachSpeech(message.id, content);
+  }
+  return message;
 }
 
 async function askAssistant() {
@@ -442,6 +551,11 @@ function bindEvents() {
   els.clearChat.addEventListener("click", clearActiveChat);
   els.dialogSearch.addEventListener("input", renderDialogs);
   els.input.addEventListener("input", resizeInput);
+  els.quickActions.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    handleQuickAction(button.dataset.action);
+  });
   els.input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -607,6 +721,7 @@ function clearActiveChat() {
     preview: fresh.preview,
     time: "сейчас",
     messages: fresh.messages,
+    prepStep: null,
     chatId: activeId === "ai" ? `citypolia-demo-${crypto.randomUUID()}` : current.chatId,
   };
   if (activeId === "ai") {
