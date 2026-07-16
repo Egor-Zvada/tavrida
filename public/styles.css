@@ -286,6 +286,10 @@ h2 {
   width: 100%;
 }
 
+.message:first-child {
+  margin-top: auto;
+}
+
 .message.out {
   justify-content: flex-end;
 }
