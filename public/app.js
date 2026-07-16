@@ -99,6 +99,7 @@ const els = {
   quickActions: document.querySelector(".quick-actions"),
   ttsToggle: document.querySelector("#ttsToggle"),
   settingsButton: document.querySelector("#settingsButton"),
+  mobileSettingsButton: document.querySelector("#mobileSettingsButton"),
   settingsPanel: document.querySelector("#settingsPanel"),
   closeSettings: document.querySelector("#closeSettings"),
   modelInput: document.querySelector("#modelInput"),
@@ -673,6 +674,7 @@ function bindEvents() {
     }
   });
   els.settingsButton.addEventListener("click", () => els.settingsPanel.classList.add("is-open"));
+  els.mobileSettingsButton.addEventListener("click", () => els.settingsPanel.classList.add("is-open"));
   els.closeSettings.addEventListener("click", () => els.settingsPanel.classList.remove("is-open"));
   els.vkSaveButton.addEventListener("click", saveVkSettings);
 }
